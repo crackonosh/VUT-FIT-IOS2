@@ -14,11 +14,18 @@
 #include <string.h>
 #include <unistd.h> 
 #include <time.h>
+#include <semaphore.h>
+#include <sys/mman.h>
 
 // GLOBAL VARIABLES
+FILE *oFile = NULL;
 int outputRow = 1;
+int *sharedVar = NULL;
+sem_t *semaphore = NULL;
 
 // FUNCTION HEADERS
+int init ();
+void cleanup ();
 void checkParameter (int parameter, char *msg);
 void immigrantsGenerator (int count, int maxTime);
 
@@ -63,17 +70,44 @@ int main (int argc, char **argv)
   checkParameter(judApprovalTime, "for judge's approval time.");
 #pragma endregion
   
+  if (init() == -1)
+  {
+    cleanup();
+    return 35;
+  }
+  //printf("semafor: %d\n", *semaphore);
+  //sem_unlink("xhaisl00-IOS-sem");
 
   immigrantsGenerator(imCount, imGenTime);
+  printf("smth\n");
 
   // END OF PROGRAM
-  wait(NULL);
+  cleanup();
   printf("\n\nExiting program...\n");
+  exit(0);
   return 0;
 }
 
 // !!! F U N C T I O N S !!!
 
+int init ()
+{
+  oFile = fopen("proj2.out", "w");
+  sharedVar = mmap(NULL, sizeof(*sharedVar), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+
+  // OSX bug - semaphore doesnt start with '/'
+  if ((semaphore = sem_open("semaphore", O_CREAT | O_EXCL, 0777, 1)) == SEM_FAILED) return -1;
+
+  return 0;
+}
+void cleanup ()
+{
+  munmap(sharedVar, sizeof(sharedVar));
+
+  sem_unlink("semaphore");
+
+  if (oFile != NULL) fclose(oFile);
+}
 /**
  * Function checks if parameter is within the allowed range.
  * Otherwise prints error msg to stderr.
