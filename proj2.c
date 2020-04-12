@@ -95,8 +95,7 @@ int init ()
   oFile = fopen("proj2.out", "w");
   sharedVar = mmap(NULL, sizeof(*sharedVar), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
 
-  // OSX bug - semaphore doesnt start with '/'
-  if ((semaphore = sem_open("semaphore", O_CREAT | O_EXCL, 0777, 1)) == SEM_FAILED) return -1;
+  if ((semaphore = sem_open("/xhaisl00-IOS-semaphore", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
   return 0;
 }
@@ -104,7 +103,7 @@ void cleanup ()
 {
   munmap(sharedVar, sizeof(sharedVar));
 
-  sem_unlink("semaphore");
+  sem_unlink("/xhaisl00-IOS-semaphore");
 
   if (oFile != NULL) fclose(oFile);
 }
