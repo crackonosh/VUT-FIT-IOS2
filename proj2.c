@@ -106,6 +106,11 @@ int main (int argc, char **argv)
 
 // !!! F U N C T I O N S !!!
 
+/**
+ * Opens file for writing, initializes global variables and creates semaphores
+ * 
+ * @return int
+ */
 int init ()
 {
   oFile = fopen("proj2.out", "w");
@@ -123,6 +128,11 @@ int init ()
 
   return 0;
 }
+/**
+ * Cleans up everything init created
+ * 
+ * @return void
+ */
 void cleanup ()
 {
   munmap(outputCount, sizeof(outputCount));
@@ -154,6 +164,13 @@ void checkParameter (int parameter, char *msg)
   }
 }
 
+/**
+ * Generates "count" number of immigrants every rand<0,maxTime>
+ * 
+ * @param int count
+ * @param int maxTime
+ * @return void
+ */
 void immigrantsGenerator (int count, int maxTime)
 {
   // renew random
@@ -181,6 +198,12 @@ void immigrantsGenerator (int count, int maxTime)
   }
   exit(0);
 }
+/**
+ * Performs all expected actions for immigrant process with number
+ * 
+ * @param int number
+ * @return void
+ */
 void processImmigrant (int number)
 {
   printf("%d\t: IMM %d\t\t : starts\n", *outputCount, number);
