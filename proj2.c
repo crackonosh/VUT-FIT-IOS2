@@ -19,15 +19,24 @@
 
 // GLOBAL VARIABLES
 FILE *oFile = NULL;
-int outputRow = 1;
-int *sharedVar = NULL;
-sem_t *semaphore = NULL;
+
+int *outputCount = NULL;        // A
+int *immNotRegistered = NULL;   // NE
+int *immNotAllowed = NULL;      // NC
+int *immInBuilding = NULL;      // NB
+
+sem_t *entrance = NULL; // immigrants can enter one by one
+sem_t *registrations = NULL; // immigrants can register one by one
+sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave 
+
+// mutex for judge needed
 
 // FUNCTION HEADERS
 int init ();
 void cleanup ();
 void checkParameter (int parameter, char *msg);
 void immigrantsGenerator (int count, int maxTime);
+void processImmigrant (int number);
 
 
 /**
@@ -75,15 +84,22 @@ int main (int argc, char **argv)
     cleanup();
     return 35;
   }
-  //printf("semafor: %d\n", *semaphore);
-  //sem_unlink("xhaisl00-IOS-sem");
 
-  immigrantsGenerator(imCount, imGenTime);
-  printf("smth\n");
+  // create immigrants generator and judge process
+  pid_t id = fork();
+  if (id == 0)
+  {
+    immigrantsGenerator(imCount, imGenTime);
+  }
+  else
+  {
+
+  }
+
 
   // END OF PROGRAM
+  wait(NULL);
   cleanup();
-  printf("\n\nExiting program...\n");
   exit(0);
   return 0;
 }
@@ -93,17 +109,31 @@ int main (int argc, char **argv)
 int init ()
 {
   oFile = fopen("proj2.out", "w");
-  sharedVar = mmap(NULL, sizeof(*sharedVar), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
 
-  if ((semaphore = sem_open("/xhaisl00-IOS-semaphore", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  outputCount = mmap(NULL, sizeof(*outputCount), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+  *outputCount = 1;
+
+  immNotRegistered = mmap(NULL, sizeof(*immNotAllowed), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+  immNotAllowed = mmap(NULL, sizeof(*immNotAllowed), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+  immInBuilding = mmap(NULL, sizeof(*immInBuilding), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+
+  if ((entrance = sem_open("/xhaisl00-entrance", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  if ((entrance = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  if ((entrance = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
   return 0;
 }
 void cleanup ()
 {
-  munmap(sharedVar, sizeof(sharedVar));
+  munmap(outputCount, sizeof(outputCount));
 
-  sem_unlink("/xhaisl00-IOS-semaphore");
+  munmap(immNotRegistered, sizeof(immNotRegistered));
+  munmap(immNotAllowed, sizeof(immNotAllowed));
+  munmap(immInBuilding, sizeof(immInBuilding));
+
+  sem_unlink("/xhaisl00-entrance");
+  sem_unlink("/xhaisl00-registrations");
+  sem_unlink("/xhaisl00-judgeInBuilding");
 
   if (oFile != NULL) fclose(oFile);
 }
@@ -126,28 +156,46 @@ void checkParameter (int parameter, char *msg)
 
 void immigrantsGenerator (int count, int maxTime)
 {
+  // renew random
   time_t t;
-  int i; 
-  pid_t pid[count]; 
   srand((unsigned) time(&t));
-  for (i = 0;i < count;i++) 
+  int i; 
+  for (i = 1;i <= count;i++) 
   { 
-      sleep(rand() % maxTime / 1000);
-      // body of imigrant
-      if ((pid[i] = fork()) == 0) 
-      { 
-          printf("%d    : IMM %d      : starts\n", outputRow++, i);
-          sleep(1); 
-          printf("%d    : IMM %d      : enters\n", outputRow++, i);
-          sleep(1); 
-          printf("%d    : IMM %d      : checks\n", outputRow++, i);
-          sleep(1); 
-          printf("%d    : IMM %d      : wants certificate\n", outputRow++, i);
-          sleep(1); 
-          printf("%d    : IMM %d      : got certificate\n", outputRow++, i);
-          exit(1);
-      }
-      
-  } 
-  wait(NULL);
+    // set process to sleep for rand <0,maxTime>
+    if (maxTime > 0)
+    {
+      struct timespec ts;
+      ts.tv_sec = (rand() % maxTime) / 1000;
+      ts.tv_nsec = ((rand() % maxTime) % 1000) * 1000000;
+      nanosleep(&ts, NULL);
+    }
+
+    // body of imigrant
+    pid_t iId = fork();
+    if (iId == 0) 
+    { 
+      processImmigrant(i);
+      exit(0);
+    }
+  }
+  exit(0);
+}
+void processImmigrant (int number)
+{
+  printf("%d\t: IMM %d\t\t : starts\n", *outputCount, number);
+  *outputCount += 1;
+  // implement random sleeping 
+
+  // printf("%d    : IMM %d      : enters\n", *outputCount, i);
+  // *outputCount += 1;
+  // sleep(1); 
+  // printf("%d    : IMM %d      : checks\n", *outputCount, i);
+  // *outputCount += 1;
+  // sleep(1); 
+  // printf("%d    : IMM %d      : wants certificate\n", *outputCount, i);
+  // *outputCount += 1;
+  // sleep(1); 
+  // printf("%d    : IMM %d      : got certificate\n", *outputCount, i);
+  // *outputCount += 1;
 }
