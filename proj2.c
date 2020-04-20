@@ -13,17 +13,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h> 
+#include <stdbool.h>
 #include <time.h>
 #include <semaphore.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 
 // GLOBAL VARIABLES
 FILE *oFile = NULL;
 
 int *outputCount = NULL;        // A
-int *immNotRegistered = NULL;   // NE
+int *immRegistered = NULL;      // NE
 int *immNotAllowed = NULL;      // NC
 int *immInBuilding = NULL;      // NB
+int *remainingImmigrants = NULL; // used for judge
 
 sem_t *entrance = NULL; // immigrants can enter one by one
 sem_t *registrations = NULL; // immigrants can register one by one
@@ -32,11 +35,13 @@ sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave
 // mutex for judge needed
 
 // FUNCTION HEADERS
+
 int init ();
 void cleanup ();
 void checkParameter (int parameter, char *msg);
-void immigrantsGenerator (int count, int maxTime);
-void processImmigrant (int number);
+void immigrantsGenerator (int count, int maxTime, int maxLeaveTime);
+void processImmigrant (int number, int leaveTime);
+void processJudge (int approvalMaxTime);
 
 
 /**
@@ -48,7 +53,6 @@ void processImmigrant (int number);
  */
 int main (int argc, char **argv)
 {
-#pragma region initialization
   if (argc != 6)
   {
     fprintf(stderr, "Invalid number of arguments used.\n");
@@ -77,28 +81,60 @@ int main (int argc, char **argv)
   checkParameter(judGenTime, "for judge generation.");
   checkParameter(imLeaveTime, "for immigrant's leave time.");
   checkParameter(judApprovalTime, "for judge's approval time.");
-#pragma endregion
   
   if (init() == -1)
   {
     cleanup();
     return 35;
   }
+  *remainingImmigrants = imCount;
+  
 
   // create immigrants generator and judge process
+  pid_t judge = 0;
   pid_t id = fork();
   if (id == 0)
   {
-    immigrantsGenerator(imCount, imGenTime);
+    immigrantsGenerator(imCount, imGenTime, imLeaveTime);
   }
   else
   {
+    // renew random
+    time_t t;
+    srand((unsigned) time(&t));
 
+    judge = fork();
+    if (judge == 0)
+    {
+      // set process to sleep for rand <0,maxTime>
+      if (judGenTime > 0)
+      {
+        struct timespec ts;
+        ts.tv_sec = (rand() % judGenTime) / 1000;
+        ts.tv_nsec = ((rand() % judGenTime) % 1000) * 1000000;
+        nanosleep(&ts, NULL);
+      }
+      while (*remainingImmigrants != 0)
+      {
+        processJudge(judApprovalTime);
+
+        // set process to sleep for rand <0,maxTime>
+        if (judGenTime > 0)
+        {
+          struct timespec ts;
+          ts.tv_sec = (rand() % judGenTime) / 1000;
+          ts.tv_nsec = ((rand() % judGenTime) % 1000) * 1000000;
+          nanosleep(&ts, NULL);
+        }
+      }
+      exit(0);
+    }
   }
 
 
   // END OF PROGRAM
-  wait(NULL);
+  //wait(&judge);
+ // wait(NULL);
   cleanup();
   exit(0);
   return 0;
@@ -116,15 +152,16 @@ int init ()
   oFile = fopen("proj2.out", "w");
 
   outputCount = mmap(NULL, sizeof(*outputCount), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
-  *outputCount = 1;
 
-  immNotRegistered = mmap(NULL, sizeof(*immNotAllowed), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+  remainingImmigrants = mmap(NULL, sizeof(*remainingImmigrants), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+  immRegistered = mmap(NULL, sizeof(*immRegistered), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
   immNotAllowed = mmap(NULL, sizeof(*immNotAllowed), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
   immInBuilding = mmap(NULL, sizeof(*immInBuilding), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
 
   if ((entrance = sem_open("/xhaisl00-entrance", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
-  if ((entrance = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
-  if ((entrance = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  if ((registrations = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  sem_wait(registrations);
+  if ((judgeInBuilding = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
   return 0;
 }
@@ -137,7 +174,8 @@ void cleanup ()
 {
   munmap(outputCount, sizeof(outputCount));
 
-  munmap(immNotRegistered, sizeof(immNotRegistered));
+  munmap(remainingImmigrants, sizeof(remainingImmigrants));
+  munmap(immRegistered, sizeof(immRegistered));
   munmap(immNotAllowed, sizeof(immNotAllowed));
   munmap(immInBuilding, sizeof(immInBuilding));
 
@@ -171,13 +209,12 @@ void checkParameter (int parameter, char *msg)
  * @param int maxTime
  * @return void
  */
-void immigrantsGenerator (int count, int maxTime)
+void immigrantsGenerator (int count, int maxTime, int maxLeaveTime)
 {
   // renew random
   time_t t;
   srand((unsigned) time(&t));
-  int i; 
-  for (i = 1;i <= count;i++) 
+  for (int i = 1;i <= count;i++) 
   { 
     // set process to sleep for rand <0,maxTime>
     if (maxTime > 0)
@@ -192,7 +229,7 @@ void immigrantsGenerator (int count, int maxTime)
     pid_t iId = fork();
     if (iId == 0) 
     { 
-      processImmigrant(i);
+      processImmigrant(i, maxLeaveTime);
       exit(0);
     }
   }
@@ -204,21 +241,170 @@ void immigrantsGenerator (int count, int maxTime)
  * @param int number
  * @return void
  */
-void processImmigrant (int number)
+void processImmigrant (int number, int leaveTime)
 {
-  printf("%d\t: IMM %d\t\t : starts\n", *outputCount, number);
-  *outputCount += 1;
-  // implement random sleeping 
+  // renew random
+  time_t t;
+  srand((unsigned) time(&t));
 
-  // printf("%d    : IMM %d      : enters\n", *outputCount, i);
-  // *outputCount += 1;
-  // sleep(1); 
-  // printf("%d    : IMM %d      : checks\n", *outputCount, i);
-  // *outputCount += 1;
-  // sleep(1); 
-  // printf("%d    : IMM %d      : wants certificate\n", *outputCount, i);
-  // *outputCount += 1;
-  // sleep(1); 
-  // printf("%d    : IMM %d      : got certificate\n", *outputCount, i);
-  // *outputCount += 1;
+  *outputCount += 1;
+  printf("%d\t: IMM %d\t\t: starts:\n", *outputCount, number);
+
+  sem_wait(judgeInBuilding);
+  sem_post(judgeInBuilding);
+  sem_wait(entrance);
+
+  *outputCount += 1;
+  *immInBuilding += 1;
+  *immNotAllowed += 1;
+  printf(
+    "%d\t: IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    number,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+
+  *outputCount += 1;
+  *immRegistered += 1;
+  printf(
+    "%d\t: IMM %d\t\t: checks:\t\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    number,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+  sem_post(entrance);
+
+  sem_wait(registrations);
+  
+  *outputCount += 1;
+  printf(
+    "%d\t: IMM %d\t\t: wants cetificate\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    number,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+
+  if (leaveTime > 0)
+  {
+    struct timespec ts;
+    ts.tv_sec = (rand() % leaveTime) / 1000;
+    ts.tv_nsec = ((rand() % leaveTime) % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+  }
+
+  *outputCount += 1;
+  printf(
+    "%d\t: IMM %d\t\t: got cetificate\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    number,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+
+  sem_wait(judgeInBuilding);
+  sem_post(judgeInBuilding);
+
+  *outputCount += 1;
+  *immInBuilding -= 1;
+  printf(
+    "%d\t: IMM %d\t\t: leaves\t\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    number,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+  *remainingImmigrants -= 1;
+}
+
+
+
+void processJudge (int approvalMaxTime)
+{
+  // renew random
+  time_t t;
+  srand((unsigned) time(&t));
+
+
+  *outputCount += 1;
+  printf("%d\t: JUDGE\t\t: wants to enter\n", *outputCount);
+
+  sem_wait(judgeInBuilding);
+  *outputCount += 1;
+  printf(
+    "%d\t: JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+  //sem_post(entrance);
+
+
+  if (*immNotAllowed != *immRegistered)
+  {
+    *outputCount += 1;
+    printf(
+      "%d\t: JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
+      *outputCount,
+      *immNotAllowed,
+      *immRegistered,
+      *immInBuilding
+    );
+  }
+
+  *outputCount += 1;
+  printf(
+    "%d\t: JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+
+  if (approvalMaxTime > 0)
+  {
+    struct timespec ts;
+    ts.tv_sec = (rand() % approvalMaxTime) / 1000;
+    ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+  }
+
+  *outputCount += 1;
+  *immNotAllowed = 0;
+  *immRegistered = 0;
+  printf(
+    "%d\t: JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+
+  for (int i = 0; i < *immInBuilding; i++)
+    sem_post(registrations);
+
+  if (approvalMaxTime > 0)
+  {
+    struct timespec ts;
+    ts.tv_sec = (rand() % approvalMaxTime) / 1000;
+    ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+  }
+  *outputCount += 1;
+  printf(
+    "%d\t: JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
+    *outputCount,
+    *immNotAllowed,
+    *immRegistered,
+    *immInBuilding
+  );
+  sem_post(judgeInBuilding);
 }

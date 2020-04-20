@@ -1,4 +1,2 @@
 program:
-	gcc -std=c99 -Wall -Wextra -Werror -pedantic proj2.c -pthread -o program
-clean:
-	rm -f program
+	gcc -std=gnu99 -Wall -Wextra -Werror -pedantic -pthread proj2.c -o program
