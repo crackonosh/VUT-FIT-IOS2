@@ -18,6 +18,7 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 
 // GLOBAL VARIABLES
 FILE *oFile = NULL;
@@ -135,6 +136,7 @@ int main (int argc, char **argv)
 
 
   // END OF PROGRAM
+  wait(&judge);
   wait(NULL);
   cleanup();
   exit(0);
