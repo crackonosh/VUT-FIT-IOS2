@@ -31,6 +31,7 @@ int *remainingImmigrants = NULL; // used for judge
 sem_t *entrance = NULL; // immigrants can enter one by one
 sem_t *registrations = NULL; // immigrants can register one by one
 sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave 
+sem_t *fileWrite = NULL;
 
 // mutex for judge needed
 
@@ -162,6 +163,7 @@ int init ()
   if ((registrations = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   sem_wait(registrations);
   if ((judgeInBuilding = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  if ((fileWrite = sem_open("/xhaisl00-fileWrite", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
   return 0;
 }
@@ -182,6 +184,7 @@ void cleanup ()
   sem_unlink("/xhaisl00-entrance");
   sem_unlink("/xhaisl00-registrations");
   sem_unlink("/xhaisl00-judgeInBuilding");
+  sem_unlink("/xhaisl00-fileWrite");
 
   if (oFile != NULL) fclose(oFile);
 }
@@ -201,7 +204,6 @@ void checkParameter (int parameter, char *msg)
     exit(1);
   }
 }
-
 /**
  * Generates "count" number of immigrants every rand<0,maxTime>
  * 
