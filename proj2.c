@@ -30,6 +30,7 @@ int *remainingImmigrants = NULL; // used for judge
 
 sem_t *entrance = NULL; // immigrants can enter one by one
 sem_t *registrations = NULL; // immigrants can register one by one
+sem_t *registered = NULL; // immigrants can take out their confirmation
 sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave 
 sem_t *fileWrite = NULL;
 
@@ -134,8 +135,7 @@ int main (int argc, char **argv)
 
 
   // END OF PROGRAM
-  //wait(&judge);
- // wait(NULL);
+  wait(NULL);
   cleanup();
   exit(0);
   return 0;
@@ -161,7 +161,8 @@ int init ()
 
   if ((entrance = sem_open("/xhaisl00-entrance", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   if ((registrations = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
-  sem_wait(registrations);
+  if ((registered = sem_open("/xhaisl00-registered", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
+  sem_wait(registered);
   if ((judgeInBuilding = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   if ((fileWrite = sem_open("/xhaisl00-fileWrite", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
@@ -183,6 +184,7 @@ void cleanup ()
 
   sem_unlink("/xhaisl00-entrance");
   sem_unlink("/xhaisl00-registrations");
+  sem_unlink("/xhaisl00-registered");
   sem_unlink("/xhaisl00-judgeInBuilding");
   sem_unlink("/xhaisl00-fileWrite");
 
@@ -249,42 +251,53 @@ void processImmigrant (int number, int leaveTime)
   time_t t;
   srand((unsigned) time(&t));
 
+  // START OF IMMIGRANT
+  sem_wait(fileWrite);
   printf("%d\t: IMM %d\t\t: starts:\n", (*outputCount)++, number);
+  sem_post(fileWrite);
 
+  // JUDGE IN BUILDING CHECK
   sem_wait(judgeInBuilding);
+  //sem_wait(entrance);
+  sem_wait(fileWrite);
+    printf(
+      "%d\t: IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
+      ++(*outputCount),
+      number,
+      ++(*immNotAllowed),
+      *immRegistered,
+      ++(*immInBuilding)
+    );
+  sem_post(fileWrite);
+  //sem_post(entrance);
   sem_post(judgeInBuilding);
-  sem_wait(entrance);
 
-  printf(
-    "%d\t: IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    number,
-    ++(*immNotAllowed),
-    *immRegistered,
-    ++(*immInBuilding)
-  );
+  // CHECK IN REGISTRATIONS
+  sem_wait(fileWrite);
+    printf(
+      "%d\t: IMM %d\t\t: checks:\t\t: %d\t: %d\t: %d\n",
+      ++(*outputCount),
+      number,
+      *immNotAllowed,
+      ++(*immRegistered),
+      *immInBuilding
+    );
+  sem_post(fileWrite);
 
-  printf(
-    "%d\t: IMM %d\t\t: checks:\t\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    number,
-    *immNotAllowed,
-    ++(*immRegistered),
-    *immInBuilding
-  );
-  sem_post(entrance);
+  // WANTS CERTIFICATE
+  sem_wait(registered);
+  sem_wait(fileWrite);
+    printf(
+      "%d\t: IMM %d\t\t: wants certificate\t: %d\t: %d\t: %d\n",
+      ++(*outputCount),
+      number,
+      *immNotAllowed,
+      *immRegistered,
+      *immInBuilding
+    );
+  sem_post(fileWrite);
 
-  sem_wait(registrations);
-  
-  printf(
-    "%d\t: IMM %d\t\t: wants cetificate\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    number,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
-
+  // RANDOM SLEEP BETWEEN GETTING CERTIFICATE
   if (leaveTime > 0)
   {
     struct timespec ts;
@@ -293,27 +306,32 @@ void processImmigrant (int number, int leaveTime)
     nanosleep(&ts, NULL);
   }
 
-  printf(
-    "%d\t: IMM %d\t\t: got cetificate\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    number,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
+  // GETS CERTIFICATE
+  sem_wait(fileWrite);
+    printf(
+      "%d\t: IMM %d\t\t: got certificate\t: %d\t: %d\t: %d\n",
+      ++(*outputCount),
+      number,
+      *immNotAllowed,
+      *immRegistered,
+      *immInBuilding
+    );
+  sem_post(fileWrite);
 
   sem_wait(judgeInBuilding);
   sem_post(judgeInBuilding);
 
-  printf(
-    "%d\t: IMM %d\t\t: leaves\t\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    number,
-    *immNotAllowed,
-    *immRegistered,
-    --(*immInBuilding)
-  );
-  (*remainingImmigrants)--;
+  sem_wait(fileWrite);
+    printf(
+      "%d\t: IMM %d\t\t: leaves\t\t: %d\t: %d\t: %d\n",
+      ++(*outputCount),
+      number,
+      *immNotAllowed,
+      *immRegistered,
+      --(*immInBuilding)
+    );
+    (*remainingImmigrants)--;
+  sem_post(fileWrite);
 }
 
 
@@ -324,72 +342,90 @@ void processJudge (int approvalMaxTime)
   time_t t;
   srand((unsigned) time(&t));
 
+  // JUDGE WANTS TO ENTER BUILDING
+  sem_wait(fileWrite);
+    printf("%d\t: JUDGE\t\t: wants to enter\n", ++(*outputCount));
+  sem_post(fileWrite);
 
-  printf("%d\t: JUDGE\t\t: wants to enter\n", (*outputCount)++);
-
+  // JUDGE ENTERS BUILDING
   sem_wait(judgeInBuilding);
-  printf(
-    "%d\t: JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
+    sem_wait(fileWrite);
+      printf(
+        "%d\t: JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
+        ++(*outputCount),
+        *immNotAllowed,
+        *immRegistered,
+        *immInBuilding
+      );
+    sem_post(fileWrite);
 
+    if (*immNotAllowed != *immRegistered)
+    {
+      // WAITS FOR NOT REGISTERED IMMIGRANTS
+      sem_wait(fileWrite);
+        printf(
+          "%d\t: JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
+          ++(*outputCount),
+          *immNotAllowed,
+          *immRegistered,
+          *immInBuilding
+        );
+      sem_post(fileWrite);
+    }
 
-  if (*immNotAllowed != *immRegistered)
-  {
-    printf(
-      "%d\t: JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
-      (*outputCount)++,
-      *immNotAllowed,
-      *immRegistered,
-      *immInBuilding
-    );
-  }
+    // JUDGE STARTS CONFIRMATION
+    sem_wait(fileWrite);
+      printf(
+        "%d\t: JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
+        ++(*outputCount),
+        *immNotAllowed,
+        *immRegistered,
+        *immInBuilding
+      );
+    sem_post(fileWrite);
 
-  printf(
-    "%d\t: JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
+    // RANDOM SLEEP BETWEEN END OF CONFIRMATION
+    if (approvalMaxTime > 0)
+    {
+      struct timespec ts;
+      ts.tv_sec = (rand() % approvalMaxTime) / 1000;
+      ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
+      nanosleep(&ts, NULL);
+    }
 
-  if (approvalMaxTime > 0)
-  {
-    struct timespec ts;
-    ts.tv_sec = (rand() % approvalMaxTime) / 1000;
-    ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
-    nanosleep(&ts, NULL);
-  }
+    // END OF CONFIRMATION
+    sem_wait(fileWrite);
+      *immNotAllowed = 0;
+      *immRegistered = 0;
+      printf(
+        "%d\t: JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
+        ++(*outputCount),
+        *immNotAllowed,
+        *immRegistered,
+        *immInBuilding
+      );
+    sem_post(fileWrite);
 
-  *immNotAllowed = 0;
-  *immRegistered = 0;
-  printf(
-    "%d\t: JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
+    // SEND SIGNAL TO ALL IMMIGRANTS IN BUILDING THAT THEY MAY LEAVE
+    for (int i = 0; i < *immInBuilding; i++)
+      sem_post(registered);
 
-  for (int i = 0; i < *immInBuilding; i++)
-    sem_post(registrations);
-
-  if (approvalMaxTime > 0)
-  {
-    struct timespec ts;
-    ts.tv_sec = (rand() % approvalMaxTime) / 1000;
-    ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
-    nanosleep(&ts, NULL);
-  }
-  printf(
-    "%d\t: JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
-    (*outputCount)++,
-    *immNotAllowed,
-    *immRegistered,
-    *immInBuilding
-  );
+    // RANDOM SLEEP BEFORE LEAVE
+    if (approvalMaxTime > 0)
+    {
+      struct timespec ts;
+      ts.tv_sec = (rand() % approvalMaxTime) / 1000;
+      ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
+      nanosleep(&ts, NULL);
+    }
+    sem_wait(fileWrite);
+      printf(
+        "%d\t: JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
+        ++(*outputCount),
+        *immNotAllowed,
+        *immRegistered,
+        *immInBuilding
+      );
+    sem_post(fileWrite);
   sem_post(judgeInBuilding);
 }
