@@ -249,43 +249,36 @@ void processImmigrant (int number, int leaveTime)
   time_t t;
   srand((unsigned) time(&t));
 
-  *outputCount += 1;
-  printf("%d\t: IMM %d\t\t: starts:\n", *outputCount, number);
+  printf("%d\t: IMM %d\t\t: starts:\n", (*outputCount)++, number);
 
   sem_wait(judgeInBuilding);
   sem_post(judgeInBuilding);
   sem_wait(entrance);
 
-  *outputCount += 1;
-  *immInBuilding += 1;
-  *immNotAllowed += 1;
   printf(
     "%d\t: IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     number,
-    *immNotAllowed,
+    ++(*immNotAllowed),
     *immRegistered,
-    *immInBuilding
+    ++(*immInBuilding)
   );
 
-  *outputCount += 1;
-  *immRegistered += 1;
   printf(
     "%d\t: IMM %d\t\t: checks:\t\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     number,
     *immNotAllowed,
-    *immRegistered,
+    ++(*immRegistered),
     *immInBuilding
   );
   sem_post(entrance);
 
   sem_wait(registrations);
   
-  *outputCount += 1;
   printf(
     "%d\t: IMM %d\t\t: wants cetificate\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     number,
     *immNotAllowed,
     *immRegistered,
@@ -300,10 +293,9 @@ void processImmigrant (int number, int leaveTime)
     nanosleep(&ts, NULL);
   }
 
-  *outputCount += 1;
   printf(
     "%d\t: IMM %d\t\t: got cetificate\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     number,
     *immNotAllowed,
     *immRegistered,
@@ -313,17 +305,15 @@ void processImmigrant (int number, int leaveTime)
   sem_wait(judgeInBuilding);
   sem_post(judgeInBuilding);
 
-  *outputCount += 1;
-  *immInBuilding -= 1;
   printf(
     "%d\t: IMM %d\t\t: leaves\t\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     number,
     *immNotAllowed,
     *immRegistered,
-    *immInBuilding
+    --(*immInBuilding)
   );
-  *remainingImmigrants -= 1;
+  (*remainingImmigrants)--;
 }
 
 
@@ -335,37 +325,32 @@ void processJudge (int approvalMaxTime)
   srand((unsigned) time(&t));
 
 
-  *outputCount += 1;
-  printf("%d\t: JUDGE\t\t: wants to enter\n", *outputCount);
+  printf("%d\t: JUDGE\t\t: wants to enter\n", (*outputCount)++);
 
   sem_wait(judgeInBuilding);
-  *outputCount += 1;
   printf(
     "%d\t: JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     *immNotAllowed,
     *immRegistered,
     *immInBuilding
   );
-  //sem_post(entrance);
 
 
   if (*immNotAllowed != *immRegistered)
   {
-    *outputCount += 1;
     printf(
       "%d\t: JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
-      *outputCount,
+      (*outputCount)++,
       *immNotAllowed,
       *immRegistered,
       *immInBuilding
     );
   }
 
-  *outputCount += 1;
   printf(
     "%d\t: JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     *immNotAllowed,
     *immRegistered,
     *immInBuilding
@@ -379,12 +364,11 @@ void processJudge (int approvalMaxTime)
     nanosleep(&ts, NULL);
   }
 
-  *outputCount += 1;
   *immNotAllowed = 0;
   *immRegistered = 0;
   printf(
     "%d\t: JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     *immNotAllowed,
     *immRegistered,
     *immInBuilding
@@ -400,10 +384,9 @@ void processJudge (int approvalMaxTime)
     ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
     nanosleep(&ts, NULL);
   }
-  *outputCount += 1;
   printf(
     "%d\t: JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
-    *outputCount,
+    (*outputCount)++,
     *immNotAllowed,
     *immRegistered,
     *immInBuilding
