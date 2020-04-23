@@ -9,6 +9,7 @@
  * Summary of File:
  *    Using semaphores in real world.
  */
+// ----- INCLUDES -----
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -20,25 +21,26 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+// ----- END INCLUDES -----
 
-// GLOBAL VARIABLES
+// ----- GLOBAL VARIABLES -----
 FILE *oFile = NULL;
+struct timespec ts;
 
 int *outputCount = NULL;        // A
 int *immRegistered = NULL;      // NE
 int *immNotAllowed = NULL;      // NC
 int *immInBuilding = NULL;      // NB
 int *remainingImmigrants = NULL; // used for judge
+// ----- END GLOBAL VARIABLES -----
 
-struct timespec ts;
-
+// ----- SEMAPHORES -----
 sem_t *registered = NULL; // immigrants can take out their confirmation
 sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave 
 sem_t *fileWrite = NULL;
+// ----- END SEMAPHORES -----
 
-// mutex for judge needed
-
-// FUNCTION HEADERS
+// ----- FUNCTION HEADERS -----
 int init ();
 void cleanup ();
 void checkParameter (int parameter, char *msg);
@@ -46,6 +48,7 @@ void immigrantsGenerator (int count, int maxTime, int maxLeaveTime);
 void processImmigrant (int number, int leaveTime);
 void processJudge (int approvalMaxTime);
 void writeToFile (const char *s, ...);
+// ----- END FUNCTION HEADERS -----
 
 
 /**
@@ -125,7 +128,6 @@ int main (int argc, char **argv)
       // set process to sleep for rand <0,maxTime>
       if (judGenTime > 0)
       {
-        struct timespec ts;
         ts.tv_sec = (rand() % judGenTime) / 1000;
         ts.tv_nsec = ((rand() % judGenTime) % 1000) * 1000000;
         nanosleep(&ts, NULL);
@@ -137,7 +139,6 @@ int main (int argc, char **argv)
         // set process to sleep for rand <0,maxTime>
         if (judGenTime > 0)
         {
-          struct timespec ts;
           ts.tv_sec = (rand() % judGenTime) / 1000;
           ts.tv_nsec = ((rand() % judGenTime) % 1000) * 1000000;
           nanosleep(&ts, NULL);
@@ -150,14 +151,13 @@ int main (int argc, char **argv)
 
   // END OF PROGRAM
   wait(&judge);
-  wait(NULL);
+  wait(0);
   cleanup();
   exit(0);
   return 0;
 }
 
-// !!! F U N C T I O N S !!!
-
+// ----- FUNCTION DEFINITION -----
 /**
  * Opens file for writing, initializes global variables and creates semaphores
  * 
@@ -234,7 +234,6 @@ void immigrantsGenerator (int count, int maxTime, int maxLeaveTime)
     // set process to sleep for rand <0,maxTime>
     if (maxTime > 0)
     {
-      struct timespec ts;
       ts.tv_sec = (rand() % maxTime) / 1000;
       ts.tv_nsec = ((rand() % maxTime) % 1000) * 1000000;
       nanosleep(&ts, NULL);
@@ -292,7 +291,6 @@ void processImmigrant (int number, int leaveTime)
   // RANDOM SLEEP BETWEEN GETTING CERTIFICATE
   if (leaveTime > 0)
   {
-    struct timespec ts;
     ts.tv_sec = (rand() % leaveTime) / 1000;
     ts.tv_nsec = ((rand() % leaveTime) % 1000) * 1000000;
     nanosleep(&ts, NULL);
@@ -317,7 +315,12 @@ void processImmigrant (int number, int leaveTime)
 }
 
 
-
+/**
+ * Performs Judge's tasks
+ * 
+ * @param approvalMaxTime
+ * @return void
+ */
 void processJudge (int approvalMaxTime)
 {
   // renew random
@@ -355,7 +358,6 @@ void processJudge (int approvalMaxTime)
     // RANDOM SLEEP BETWEEN END OF CONFIRMATION
     if (approvalMaxTime > 0)
     {
-      //struct timespec ts;
       ts.tv_sec = (rand() % approvalMaxTime) / 1000;
       ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
       nanosleep(&ts, NULL);
@@ -377,7 +379,6 @@ void processJudge (int approvalMaxTime)
     // RANDOM SLEEP BEFORE LEAVE
     if (approvalMaxTime > 0)
     {
-      struct timespec ts;
       ts.tv_sec = (rand() % approvalMaxTime) / 1000;
       ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
       nanosleep(&ts, NULL);
@@ -408,3 +409,4 @@ void writeToFile (const char *s, ...)
     va_end(args);
   sem_post(fileWrite);
 }
+// ----- END FUNCTION DEFINITION -----
