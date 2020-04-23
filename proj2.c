@@ -7,10 +7,11 @@
  * Course: IOS
  * 
  * Summary of File:
- *  TODO
+ *    Using semaphores in real world.
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h> 
 #include <stdbool.h>
@@ -29,8 +30,6 @@ int *immNotAllowed = NULL;      // NC
 int *immInBuilding = NULL;      // NB
 int *remainingImmigrants = NULL; // used for judge
 
-sem_t *entrance = NULL; // immigrants can enter one by one
-sem_t *registrations = NULL; // immigrants can register one by one
 sem_t *registered = NULL; // immigrants can take out their confirmation
 sem_t *judgeInBuilding = NULL; // if judge inside, immigrants cannot leave 
 sem_t *fileWrite = NULL;
@@ -38,13 +37,13 @@ sem_t *fileWrite = NULL;
 // mutex for judge needed
 
 // FUNCTION HEADERS
-
 int init ();
 void cleanup ();
 void checkParameter (int parameter, char *msg);
 void immigrantsGenerator (int count, int maxTime, int maxLeaveTime);
 void processImmigrant (int number, int leaveTime);
 void processJudge (int approvalMaxTime);
+void writeToFile (const char *s, ...);
 
 
 /**
@@ -96,10 +95,17 @@ int main (int argc, char **argv)
   // create immigrants generator and judge process
   pid_t judge = 0;
   pid_t id = fork();
-  if (id == 0)
+
+  // error
+  if (id == -1)
   {
-    immigrantsGenerator(imCount, imGenTime, imLeaveTime);
+    fprintf(stderr, "Unable to perform fork. Exiting...");
+    exit(12);
   }
+  // child
+  else if (id == 0)
+    immigrantsGenerator(imCount, imGenTime, imLeaveTime);
+  // parent
   else
   {
     // renew random
@@ -107,7 +113,12 @@ int main (int argc, char **argv)
     srand((unsigned) time(&t));
 
     judge = fork();
-    if (judge == 0)
+    if (judge == -1)
+    {
+      fprintf(stderr, "Unable to create judge. Aborting!");
+      exit(13);
+    }
+    else if (judge == 0)
     {
       // set process to sleep for rand <0,maxTime>
       if (judGenTime > 0)
@@ -161,8 +172,6 @@ int init ()
   immNotAllowed = mmap(NULL, sizeof(*immNotAllowed), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
   immInBuilding = mmap(NULL, sizeof(*immInBuilding), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
 
-  if ((entrance = sem_open("/xhaisl00-entrance", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
-  if ((registrations = sem_open("/xhaisl00-registrations", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   if ((registered = sem_open("/xhaisl00-registered", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   sem_wait(registered);
   if ((judgeInBuilding = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
@@ -184,8 +193,6 @@ void cleanup ()
   munmap(immNotAllowed, sizeof(immNotAllowed));
   munmap(immInBuilding, sizeof(immInBuilding));
 
-  sem_unlink("/xhaisl00-entrance");
-  sem_unlink("/xhaisl00-registrations");
   sem_unlink("/xhaisl00-registered");
   sem_unlink("/xhaisl00-judgeInBuilding");
   sem_unlink("/xhaisl00-fileWrite");
@@ -255,12 +262,11 @@ void processImmigrant (int number, int leaveTime)
 
   // START OF IMMIGRANT
   sem_wait(fileWrite);
-  printf("%d\t: IMM %d\t\t: starts:\n", (*outputCount)++, number);
+  printf("%d\t: IMM %d\t\t: starts:\n", ++(*outputCount), number);
   sem_post(fileWrite);
 
   // JUDGE IN BUILDING CHECK
   sem_wait(judgeInBuilding);
-  //sem_wait(entrance);
   sem_wait(fileWrite);
     printf(
       "%d\t: IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
@@ -271,7 +277,6 @@ void processImmigrant (int number, int leaveTime)
       ++(*immInBuilding)
     );
   sem_post(fileWrite);
-  //sem_post(entrance);
   sem_post(judgeInBuilding);
 
   // CHECK IN REGISTRATIONS
@@ -346,45 +351,31 @@ void processJudge (int approvalMaxTime)
 
   // JUDGE WANTS TO ENTER BUILDING
   sem_wait(fileWrite);
-    printf("%d\t: JUDGE\t\t: wants to enter\n", ++(*outputCount));
+    if (*remainingImmigrants == 0) exit(0);
+    fprintf(stdout, "%d\t: JUDGE\t\t: wants to enter\n", ++(*outputCount));
   sem_post(fileWrite);
 
   // JUDGE ENTERS BUILDING
   sem_wait(judgeInBuilding);
-    sem_wait(fileWrite);
-      printf(
-        "%d\t: JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
-        ++(*outputCount),
-        *immNotAllowed,
-        *immRegistered,
-        *immInBuilding
-      );
-    sem_post(fileWrite);
+    writeToFile(
+      "JUDGE\t\t: enters\t\t: %d\t: %d\t: %d\n",
+      *immNotAllowed, *immRegistered, *immInBuilding
+    );
 
     if (*immNotAllowed != *immRegistered)
     {
       // WAITS FOR NOT REGISTERED IMMIGRANTS
-      sem_wait(fileWrite);
-        printf(
-          "%d\t: JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
-          ++(*outputCount),
-          *immNotAllowed,
-          *immRegistered,
-          *immInBuilding
-        );
-      sem_post(fileWrite);
+      writeToFile(
+        "JUDGE\t\t: waits for imm\t: %d\t: %d\t: %d\n",
+        *immNotAllowed, *immRegistered, *immInBuilding
+      );
     }
 
     // JUDGE STARTS CONFIRMATION
-    sem_wait(fileWrite);
-      printf(
-        "%d\t: JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
-        ++(*outputCount),
-        *immNotAllowed,
-        *immRegistered,
-        *immInBuilding
-      );
-    sem_post(fileWrite);
+    writeToFile(
+      "JUDGE\t\t: starts confirmation\t: %d\t: %d\t: %d\n",
+      *immNotAllowed, *immNotAllowed, *immRegistered
+    );
 
     // RANDOM SLEEP BETWEEN END OF CONFIRMATION
     if (approvalMaxTime > 0)
@@ -396,17 +387,10 @@ void processJudge (int approvalMaxTime)
     }
 
     // END OF CONFIRMATION
-    sem_wait(fileWrite);
-      *immNotAllowed = 0;
-      *immRegistered = 0;
-      printf(
-        "%d\t: JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
-        ++(*outputCount),
-        *immNotAllowed,
-        *immRegistered,
-        *immInBuilding
-      );
-    sem_post(fileWrite);
+    writeToFile(
+      "JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
+      *immNotAllowed = 0, *immRegistered = 0, *immInBuilding
+    );
 
     // SEND SIGNAL TO ALL IMMIGRANTS IN BUILDING THAT THEY MAY LEAVE
     for (int i = 0; i < *immInBuilding; i++)
@@ -420,14 +404,28 @@ void processJudge (int approvalMaxTime)
       ts.tv_nsec = ((rand() % approvalMaxTime) % 1000) * 1000000;
       nanosleep(&ts, NULL);
     }
-    sem_wait(fileWrite);
-      printf(
-        "%d\t: JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
-        ++(*outputCount),
-        *immNotAllowed,
-        *immRegistered,
-        *immInBuilding
-      );
-    sem_post(fileWrite);
+
+    writeToFile(
+      "JUDGE\t\t: leaves\t\t: %d\t: %d\t: %d\n",
+      *immNotAllowed, *immRegistered, *immInBuilding
+    );
   sem_post(judgeInBuilding);
+}
+/**
+ * Function writes formatted string to file
+ * 
+ * @param *s formatted string
+ * @return void
+ */
+void writeToFile (const char *s, ...)
+{
+  sem_wait(fileWrite);
+    va_list args;
+    va_start(args, s);
+
+    fprintf(stderr, "%d\t: ", ++(*outputCount));
+    vfprintf(stderr, s, args);
+
+    va_end(args);
+  sem_post(fileWrite);
 }
