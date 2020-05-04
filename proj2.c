@@ -131,11 +131,6 @@ int main (int argc, char **argv)
 }
 
 // ----- FUNCTION DEFINITION -----
-/**
- * Opens file for writing, initializes global variables and creates semaphores
- * 
- * @return int
- */
 int init ()
 {
   oFile = fopen("proj2.out", "w");
@@ -154,11 +149,6 @@ int init ()
 
   return 0;
 }
-/**
- * Cleans up everything init created
- * 
- * @return void
- */
 void cleanup ()
 {
   munmap(outputCount, sizeof(outputCount));
@@ -174,14 +164,6 @@ void cleanup ()
 
   if (oFile != NULL) fclose(oFile);
 }
-/**
- * Function checks if parameter is within the allowed range.
- * Otherwise prints error msg to stderr.
- * 
- * @param int parameter
- * @param char *msg
- * @return void
- */
 void checkParameter (int parameter, char *msg)
 {
   if (parameter < 0 || parameter > 2000)
@@ -190,13 +172,6 @@ void checkParameter (int parameter, char *msg)
     exit(1);
   }
 }
-/**
- * Generates "count" number of immigrants every rand<0,maxTime>
- * 
- * @param int count
- * @param int maxTime
- * @return void
- */
 void immigrantsGenerator (int count, int maxTime, int maxLeaveTime)
 {
   // renew random
@@ -222,12 +197,6 @@ void immigrantsGenerator (int count, int maxTime, int maxLeaveTime)
   }
   exit(0);
 }
-/**
- * Performs all expected actions for immigrant process with number
- * 
- * @param int number
- * @return void
- */
 void processImmigrant (int number, int leaveTime)
 {
   // renew random
@@ -240,7 +209,7 @@ void processImmigrant (int number, int leaveTime)
   // JUDGE IN BUILDING CHECK
   sem_wait(judgeInBuilding);
     writeToFile(
-      "IMM %d\t\t: enters:\t\t: %d\t: %d\t: %d\n",
+      "IMM %d\t\t: enters\t\t: %d\t: %d\t: %d\n",
       number, ++(*immNotAllowed),
       *immRegistered, ++(*immInBuilding)
     );
@@ -248,7 +217,7 @@ void processImmigrant (int number, int leaveTime)
 
   // CHECK IN REGISTRATIONS
   writeToFile(
-    "IMM %d\t\t: checks:\t\t: %d\t: %d\t: %d\n",
+    "IMM %d\t\t: checks\t\t: %d\t: %d\t: %d\n",
     number, *immNotAllowed,
     ++(*immRegistered), *immInBuilding
   );
@@ -285,12 +254,6 @@ void processImmigrant (int number, int leaveTime)
     *immRegistered, --(*immInBuilding)
   );
 }
-/**
- * Performs Judge's tasks
- * 
- * @param approvalMaxTime
- * @return void
- */
 void processJudge (int approvalMaxTime)
 {
   // renew random
@@ -335,7 +298,7 @@ void processJudge (int approvalMaxTime)
 
     // END OF CONFIRMATION
     writeToFile(
-      "JUDGE\t\t: ends confirmation:\t: %d\t: %d\t: %d\n",
+      "JUDGE\t\t: ends confirmation\t: %d\t: %d\t: %d\n",
       *immNotAllowed = 0, *immRegistered = 0, *immInBuilding
     );
 
@@ -360,12 +323,6 @@ void processJudge (int approvalMaxTime)
     );
   sem_post(judgeInBuilding);
 }
-/**
- * Function writes formatted string with args to file
- * 
- * @param *s formatted string
- * @return void
- */
 void writeToFile (const char *s, ...)
 {
   sem_wait(fileWrite);
