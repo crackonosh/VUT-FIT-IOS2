@@ -78,6 +78,7 @@ int main (int argc, char **argv)
   if (id == -1)
   {
     fprintf(stderr, "Unable to perform fork. Exiting...");
+    cleanup();
     exit(1);
   }
   // child
@@ -94,6 +95,7 @@ int main (int argc, char **argv)
     if (judge == -1)
     {
       fprintf(stderr, "Unable to create judge. Aborting!");
+      cleanup()
       exit(1);
     }
     else if (judge == 0)
@@ -148,7 +150,7 @@ int init ()
 
   // if semaphores were initialized before, return -1 -> will perform cleanup
   if ((registered = sem_open("/xhaisl00-registered", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
-  sem_wait(registered);
+  sem_wait(registered); // null it before usage
   if ((judgeInBuilding = sem_open("/xhaisl00-judgeInBuilding", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
   if ((fileWrite = sem_open("/xhaisl00-fileWrite", O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED) return -1;
 
