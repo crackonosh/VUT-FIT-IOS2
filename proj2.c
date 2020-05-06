@@ -95,7 +95,7 @@ int main (int argc, char **argv)
     if (judge == -1)
     {
       fprintf(stderr, "Unable to create judge. Aborting!");
-      cleanup()
+      cleanup();
       exit(1);
     }
     else if (judge == 0)
