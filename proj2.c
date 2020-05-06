@@ -194,6 +194,12 @@ void immigrantsGenerator (int count, int maxTime, int maxLeaveTime)
 
     // body of imigrant
     pid_t iId = fork();
+    if (iId == -1)
+    {
+      fprintf(stderr, "Unable to create immigrant. Aborting!");
+      *remainingImmigrants = 0;
+      exit(1);
+    }
     if (iId == 0) 
     { 
       processImmigrant(i, maxLeaveTime);
