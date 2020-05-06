@@ -3,8 +3,8 @@ FILE *oFile = NULL;
 struct timespec ts;
 
 int *outputCount = NULL;        // A
-int *immRegistered = NULL;      // NE
-int *immNotAllowed = NULL;      // NC
+int *immNotAllowed = NULL;      // NE
+int *immRegistered = NULL;      // NC
 int *immInBuilding = NULL;      // NB
 int *remainingImmigrants = NULL; // used for judge
 // ----- END GLOBAL VARIABLES -----
