@@ -119,10 +119,7 @@ int main (int argc, char **argv)
           nanosleep(&ts, NULL);
         }
       }
-      writeToFile(
-        "JUDGE\t\t: finishes\t\t: %d\t: %d\t: %d\n",
-        *immNotAllowed, *immRegistered, *immInBuilding
-      );
+      writeToFile("JUDGE\t\t: finishes\n");
       exit(0);
     }
   }
